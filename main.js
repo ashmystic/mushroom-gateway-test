@@ -198,6 +198,12 @@ function applySceneState(settings, progress) {
 
 const portalVertexShader = `
   varying vec2 vUv;
+  /**
+   * Main vertex shader entry point.
+   * Passes UV coordinates to the fragment shader and computes the final vertex position.
+   * @param position - Vertex position in model space (built-in attribute)
+   * @param uv - UV coordinates (built-in attribute)
+   */
   void main() {
     vUv = uv;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -209,15 +215,31 @@ const portalFragmentShader = `
   uniform float uTime;
   uniform vec2 uResolution;
 
+  /**
+   * Returns a 2x2 rotation matrix for a given angle in radians.
+   * @param angle - Angle in radians
+   * @returns mat2 - 2D rotation matrix
+   */
   mat2 rotate2d(float angle){
       return mat2(cos(angle), -sin(angle),
                   sin(angle), cos(angle));
   }
 
+  /**
+   * Pseudo-random number generator based on input coordinates.
+   * Used for procedural noise and sparkle effects.
+   * @param st - 2D coordinates
+   * @returns float - Pseudo-random value in [0,1]
+   */
   float random(vec2 st) {
     return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
   }
 
+  /**
+   * 2D value noise function using bilinear interpolation of random values.
+   * @param st - 2D coordinates
+   * @returns float - Smooth noise value
+   */
   float noise(vec2 st) {
       vec2 i = floor(st);
       vec2 f = fract(st);
@@ -234,6 +256,12 @@ const portalFragmentShader = `
              (d - b) * u.x * u.y;
   }
 
+  /**
+   * Fractional Brownian Motion (FBM) using multiple octaves of noise.
+   * Creates more complex, natural-looking patterns.
+   * @param st - 2D coordinates
+   * @returns float - FBM noise value
+   */
   float fbm(vec2 st) {
       float value = 0.0;
       float amplitude = 0.5;
@@ -247,6 +275,13 @@ const portalFragmentShader = `
       return value;
   }
 
+  /**
+   * Blurred FBM by averaging FBM values in a local neighborhood.
+   * Used for soft, glowing portal effects.
+   * @param st - 2D coordinates
+   * @param blurAmount - Amount of blur (radius)
+   * @returns float - Blurred FBM value
+   */
   float blurredFbm(vec2 st, float blurAmount) {
       float total = 0.0;
       float radius = blurAmount / min(uResolution.x, uResolution.y) * 1.5;
@@ -259,6 +294,14 @@ const portalFragmentShader = `
       return total / 9.0;
   }
 
+  /**
+   * Samples swirled, blurred FBM noise at multiple nearby points for extra softness.
+   * Used for the animated portal core.
+   * @param swirledUv - Swirled UV coordinates
+   * @param time - Animation time
+   * @param sampleBlurAmount - Blur radius for sampling
+   * @returns float - Averaged swirled, blurred FBM value
+   */
   float sampleSwirledBlurredNoise(vec2 swirledUv, float time, float sampleBlurAmount) {
       float total = 0.0;
       float offsetScale = sampleBlurAmount / min(uResolution.x, uResolution.y);
@@ -273,6 +316,10 @@ const portalFragmentShader = `
       return total / 9.0;
   }
 
+  /**
+   * Main fragment shader entry point.
+   * Computes swirling, glowing, animated portal color and alpha with sparkles.
+   */
   void main() {
     vec2 centeredUv = vUv - 0.5;
 
