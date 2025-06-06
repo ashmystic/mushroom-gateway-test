@@ -19,27 +19,45 @@ const textureLoader = new THREE.TextureLoader();
 
 let barkTexture, foliageTexture, grassTexture;
 
-// Seeded PRNG (Mulberry32)
+/**
+ * Seeded pseudo-random number generator using the Mulberry32 algorithm.
+ * Used for deterministic procedural generation (e.g., tree/mushroom placement).
+ */
 class SeededRandom {
+    /**
+     * @param {number} seed - The initial seed value for the PRNG.
+     */
     constructor(seed) {
         this.seed = seed;
         if (this.seed === undefined || this.seed === null) {
             this.seed = Date.now(); // Fallback if no seed is provided
         }
     }
-
-    // Mulberry32 algorithm
+    /**
+     * Generates a pseudo-random float in [0, 1).
+     * @returns {number} Random float in [0, 1).
+     */
     random() {
         let t = this.seed += 0x6D2B79F5;
         t = Math.imul(t ^ t >>> 15, t | 1);
         t ^= t + Math.imul(t ^ t >>> 7, t | 61);
         return ((t ^ t >>> 14) >>> 0) / 4294967296;
     }
-
+    /**
+     * Generates a random float in [min, max).
+     * @param {number} min - Minimum value (inclusive).
+     * @param {number} max - Maximum value (exclusive).
+     * @returns {number} Random float in [min, max).
+     */
     randFloat(min, max) {
         return this.random() * (max - min) + min;
     }
-
+    /**
+     * Generates a random integer in [min, max).
+     * @param {number} min - Minimum value (inclusive).
+     * @param {number} max - Maximum value (exclusive).
+     * @returns {number} Random integer in [min, max).
+     */
     randInt(min, max) { // Inclusive min, exclusive max
         return Math.floor(this.random() * (max - min) + min);
     }
@@ -103,6 +121,12 @@ const nightSettings = {
 
 let isDaytime = true; // Start in day mode
 
+/**
+ * Updates the position and visibility of the sun or moon mesh and the directional light
+ * based on the current progress through the day or night cycle.
+ * @param {number} progress - Progress through the cycle (0 to 1).
+ * @param {boolean} isDay - True if updating for day (sun), false for night (moon).
+ */
 function updateCelestialBodyPosition(progress, isDay) {
     // Calculate the position on an arc from -PI to 0 (East to West horizon)
     // This maps the progress (0 to 1) to an angle (PI to 0)
@@ -143,6 +167,12 @@ function updateCelestialBodyPosition(progress, isDay) {
     }
 }
 
+/**
+ * Applies the current scene state (lighting, fog, colors) for day or night.
+ * Also updates celestial body positions.
+ * @param {object} settings - Settings object for day or night.
+ * @param {number} progress - Progress through the current cycle (0 to 1).
+ */
 function applySceneState(settings, progress) {
     scene.background = settings.background;
     scene.fog = settings.fog;
@@ -277,7 +307,13 @@ const portalFragmentShader = `
   }
 `;
 
-// Helper: 2D pseudo-random function (deterministic for integer inputs)
+/**
+ * 2D pseudo-random function for deterministic value noise.
+ * Used in terrain generation.
+ * @param {number} ix - Integer X coordinate.
+ * @param {number} iz - Integer Z coordinate.
+ * @returns {number} Pseudo-random value in [-1, 1].
+ */
 function pseudoRandom(ix, iz) {
     let n = ix + iz * 57;
     n = (n << 13) ^ n;
@@ -287,7 +323,13 @@ function pseudoRandom(ix, iz) {
     return 1.0 - n / 1073741823.0; // Convert to -1.0 to 1.0 range
 }
 
-// Interpolated noise function (Value Noise)
+/**
+ * Interpolated value noise for smooth terrain generation.
+ * @param {number} x - X coordinate.
+ * @param {number} z - Z coordinate.
+ * @param {number} frequency - Frequency of the noise.
+ * @returns {number} Interpolated noise value.
+ */
 function interpolatedNoise(x, z, frequency) {
     const scaledX = x * frequency;
     const scaledZ = z * frequency;
@@ -312,7 +354,12 @@ function interpolatedNoise(x, z, frequency) {
     return THREE.MathUtils.lerp(i1, i2, smoothFracZ);
 }
 
-// Generates terrain height at a given world (x, z) coordinate using Fractional Brownian Motion (FBM)
+/**
+ * Computes the terrain height at a given (x, z) world coordinate using FBM.
+ * @param {number} worldX - World X coordinate.
+ * @param {number} worldZ - World Z coordinate.
+ * @returns {number} Height value for terrain at (x, z).
+ */
 function getTerrainHeight(worldX, worldZ) {
     let totalHeight = 0;
     let currentFrequency = TERRAIN_BASE_FREQUENCY;
@@ -332,6 +379,10 @@ function getTerrainHeight(worldX, worldZ) {
     return (totalHeight / normalizationFactor) * TERRAIN_MAX_HEIGHT;
 }
 
+/**
+ * Creates geometry for a single deciduous tree (trunk and foliage).
+ * @returns {{trunkGeo: THREE.CylinderGeometry, foliageGeo: THREE.SphereGeometry}}
+ */
 function createDeciduousTreeGeometry() {
     const trunkHeight = placementPrng.randFloat(1.5, 2.5);
     const trunkRadius = trunkHeight * 0.1;
@@ -350,6 +401,10 @@ function createDeciduousTreeGeometry() {
     return { trunkGeo, foliageGeo };
 }
 
+/**
+ * Creates geometry for a single coniferous tree (trunk and foliage).
+ * @returns {{trunkGeo: THREE.CylinderGeometry, foliageGeo: THREE.ConeGeometry}}
+ */
 function createConiferousTreeGeometry() {
     const trunkHeight = placementPrng.randFloat(2.0, 3.5);
     const trunkRadius = trunkHeight * 0.08;
@@ -368,6 +423,11 @@ function createConiferousTreeGeometry() {
 let deciduousTrunkInstances, deciduousFoliageInstances;
 let coniferousTrunkInstances, coniferousFoliageInstances;
 
+/**
+ * Creates and places all instanced trees in the scene using procedural placement.
+ * Adds instanced meshes to the scene.
+ * Side effects: modifies global tree instance variables and adds to scene.
+ */
 function createInstancedTrees() {
     const deciduousTemplate = createDeciduousTreeGeometry();
     const coniferousTemplate = createConiferousTreeGeometry();
@@ -440,6 +500,10 @@ function createInstancedTrees() {
 
 let mushroomStemInstances, mushroomCapInstancesVariety1, mushroomCapInstancesVariety2, mushroomCapInstancesVariety3;
 
+/**
+ * Creates geometry templates for different mushroom varieties.
+ * @returns {Array<{stemGeo: THREE.CylinderGeometry, capGeo: THREE.Geometry, type: number}>}
+ */
 function createMushroomGeometries() {
     const geometries = [];
 
@@ -465,6 +529,11 @@ function createMushroomGeometries() {
     return geometries;
 }
 
+/**
+ * Creates and places all instanced mushrooms in the scene using procedural placement.
+ * Adds instanced meshes to the scene.
+ * Side effects: modifies global mushroom instance variables and adds to scene.
+ */
 function createInstancedMushrooms() {
     const mushroomTemplates = createMushroomGeometries();
 
@@ -547,10 +616,19 @@ const GRAVITY = 15.0; // A bit higher for a more "poppy" feel
 
 let mushroomTemplates;
 
+/**
+ * Initializes mushroom geometry templates for spawning dynamic mushrooms.
+ * Side effects: sets global mushroomTemplates variable.
+ */
 function initMushroomTemplates() {
     mushroomTemplates = createMushroomGeometries();
 }
 
+/**
+ * Spawns a dynamic mushroom at the portal location and launches it with velocity.
+ * Handles removal of oldest mushrooms if over limit.
+ * Side effects: adds/removes meshes from scene, updates spawnedMushrooms array.
+ */
 function spawnMushroom() {
     if (spawnedMushrooms.length >= MAX_SPAWNED_MUSHROOMS) {
         const oldestMushroomData = spawnedMushrooms.shift();
@@ -615,6 +693,11 @@ function spawnMushroom() {
     scene.add(mushroomGroup);
 }
 
+/**
+ * Handles pointer (mouse/touch) down events for interaction.
+ * Spawns a mushroom if the mushroom gate is clicked.
+ * @param {PointerEvent} event - The pointer event.
+ */
 function onPointerDown(event) {
     pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
     pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
@@ -630,6 +713,11 @@ function onPointerDown(event) {
     }
 }
 
+/**
+ * Initializes the Three.js scene, camera, renderer, controls, lighting, terrain, models, and event listeners.
+ * Loads the mushroom gateway model and sets up the portal.
+ * Side effects: sets up the entire scene and starts the app.
+ */
 function init() {
     scene = new THREE.Scene();
 
@@ -884,6 +972,10 @@ function init() {
     });
 }
 
+/**
+ * Handles window resize events to keep the renderer and camera aspect ratio in sync.
+ * Side effects: updates renderer and camera.
+ */
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -893,6 +985,10 @@ function onWindowResize() {
     }
 }
 
+/**
+ * Main animation loop. Updates time, handles day/night transitions, animates mushrooms, and renders the scene.
+ * Side effects: updates scene, calls render().
+ */
 function animate() {
     requestAnimationFrame(animate);
 
@@ -963,6 +1059,9 @@ function animate() {
     render();
 }
 
+/**
+ * Renders the current scene from the camera's perspective.
+ */
 function render() {
     renderer.render(scene, camera);
 }
